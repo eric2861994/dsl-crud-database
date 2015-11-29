@@ -1,0 +1,9 @@
+database database1 {
+	table table1 {
+		string(255) field1;
+		integer field2;
+		float field3;
+		boolean field4;
+		timestamp field5;
+	}
+}
