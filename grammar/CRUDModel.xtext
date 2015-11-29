@@ -1,0 +1,59 @@
+grammar org.if4150.databasecruddsl.CRUDModel with org.eclipse.xtext.common.Terminals
+
+generate cRUDModel "http://www.if4150.org/databasecruddsl/CRUDModel"
+
+CRUDModel:
+	Database
+;
+
+Database:
+	'database' databaseName = ID '{'
+		(tables += Table)*
+	'}'
+;
+
+Table:
+	'table' tableName = ID '{'
+		(tableEntries += TableEntry)*
+	'}'
+;
+
+TableEntry:
+	TableEntryWithoutParameter | TableEntryWithParameter
+;
+
+TableEntryWithoutParameter:
+	datatype = SQLTypeWithoutParameter columnName = ID ';'
+;
+
+TableEntryWithParameter:
+	datatype = SQLTypeWithParameter columnName = ID ';'
+;
+
+SQLTypeWithParameter:
+	SQLString
+;
+
+SQLString:
+	'string' '(' stringLength = INT ')'
+;
+
+SQLTypeWithoutParameter:
+	SQLInteger | SQLBoolean | SQLTimestamp | SQLFloat
+;
+
+SQLInteger:
+	'integer'
+;
+
+SQLBoolean:
+	'boolean'
+;
+
+SQLTimestamp:
+	'timestamp'
+;
+
+SQLFloat:
+	'float'
+;
