@@ -1,5 +1,6 @@
 
 import java.io.PrintStream;
+
 import org.if4150.databasecruddsl.cRUDModel.Database;
 import org.if4150.databasecruddsl.cRUDModel.Table;
 import org.if4150.databasecruddsl.cRUDModel.TableEntry;
@@ -11,12 +12,8 @@ import org.if4150.databasecruddsl.cRUDModel.TableEntryWithoutParameter;
  * and open the template in the editor.
  */
 
-/**
- *
- * @author ahmadshahab
- */
 public class BackendCompiler {
-    
+
     private void println(String line, int nestLevel, PrintStream out) {
         StringBuilder stringBuilder = new StringBuilder();
         for (int i = 0; i < SPACES_PER_LEVEL * nestLevel; i++) {
@@ -27,8 +24,8 @@ public class BackendCompiler {
 
         out.println(stringBuilder.toString());
     }
-    
-    public void compilerReadBackend(Database database, Table table, PrintStream out){
+
+    public void compilerReadBackend(Database database, Table table, PrintStream out) {
         System.out.println("masuk");
     }
 
@@ -37,8 +34,6 @@ public class BackendCompiler {
 
         println("<?php", 0, out);
         println("$mysqli = new mysqli(<location>, <user>, <password>, <database>);", 0, out);
-        println("$headers = apache_request_headers();", 0, out);
-
 
         println("if ($mysqli->connect_error) {", 0, out);
         println("die('Connect Error (' . $mysqli->connect_errno . ') ' . $mysqli->connect_error);", 1, out);
@@ -46,13 +41,33 @@ public class BackendCompiler {
 
         println("if ($stmt = $mysqli->prepare(\"INSERT INTO " + tablename + " " + getColumnTuple(table) + " VALUES " +
                 getQuestionTuple(table) + ";\")) {", 0, out);
+
+        // get value types
+        StringBuilder types = new StringBuilder();
         for (TableEntry tableEntry : table.getTableEntries()) {
-            println("$stmt->bind_param(\"" + getEntryType(tableEntry) + "\", $headers[" +
-                    tableEntry.getColumnName() + "]);", 1, out);
+            types.append(getEntryType(tableEntry));
         }
+
+        // get values
+        StringBuilder values = new StringBuilder();
+        for (TableEntry tableEntry : table.getTableEntries()) {
+            values.append("$_POST[\"");
+            values.append(tableEntry.getColumnName());
+            values.append("\"], ");
+        }
+
+        int valueSize = values.length();
+        if (valueSize > 0) {
+            values.delete(valueSize - 2, valueSize);
+        }
+
+        println("$stmt->bind_param(\"" + types.toString() + "\", " + values.toString() + ");", 1, out);
         println("}", 0, out);
 
         println("$mysqli->close();", 0, out);
+
+        println("header(\"Location: " + Compiler.getCreateFormLocation(tablename) + "\");", 0, out);
+        println("die();", 0, out);
 
         println("?>", 0, out);
     }
@@ -111,6 +126,6 @@ public class BackendCompiler {
 
         return stringBuilder.toString();
     }
-    
+
     private static final int SPACES_PER_LEVEL = 2;
 }

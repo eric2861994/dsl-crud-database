@@ -4,6 +4,5 @@ database database1 {
 		integer field2;
 		float field3;
 		boolean field4;
-		timestamp field5;
 	}
 }
