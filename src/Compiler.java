@@ -53,7 +53,7 @@ public class Compiler {
 
         // create directories if it doesn't exist
         if (!formsDirectory.exists()) {
-            formsDirectory.mkdirs();
+            formsDirectory.mkdir();
         } else if (!formsDirectory.isDirectory()) {
             throw new FileNotFoundException(FORMS_OUTPUT_DIRECTORY + " is not a directory! I don't understand...");
         }
@@ -64,10 +64,19 @@ public class Compiler {
     }
 
     public void generateForm(Table table) throws FileNotFoundException {
+        String tablename = table.getTableName();
 
+        String completePath = FORMS_OUTPUT_DIRECTORY + "/" + tablename;
+        File tableDirectory = new File(completePath);
 
+        // create directories if it doesn't exist
+        if (!tableDirectory.exists()) {
+            tableDirectory.mkdir();
+        } else if (!tableDirectory.isDirectory()) {
+            throw new FileNotFoundException(completePath + " is not a directory! I don't understand...");
+        }
 
-        File createFormFile = new File(FORMS_OUTPUT_DIRECTORY + "/create.xhtml");
+        File createFormFile = new File(completePath + "/create.xhtml");
 
         // no need to close on exception because nothing can be closed anyway
         OutputStream outputStream = new FileOutputStream(createFormFile);
@@ -140,5 +149,5 @@ public class Compiler {
     }
 
     private static final String FORMS_OUTPUT_DIRECTORY = "forms";
-    
+
 }
