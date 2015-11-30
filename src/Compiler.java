@@ -15,6 +15,7 @@ import java.util.List;
 
 public class Compiler {
     private final FormCompiler formCompiler = new FormCompiler();
+    private final BackendCompiler backendCompiler = new BackendCompiler();
 
     private Compiler() {
 
@@ -29,7 +30,7 @@ public class Compiler {
         IResourceValidator iResourceValidator = injector.getInstance(IResourceValidator.class);
         XtextResourceSet resourceSet = injector.getInstance(XtextResourceSet.class);
         resourceSet.addLoadOption(XtextResource.OPTION_RESOLVE_ALL, Boolean.TRUE);
-        Resource resource = resourceSet.getResource(URI.createURI("res/test.crud"), true);
+        Resource resource = resourceSet.getResource(URI.createURI("test.crud"), true);
 
         for (Resource.Diagnostic diagnostic : resource.getErrors()) {
             System.err.println(diagnostic);
@@ -45,7 +46,8 @@ public class Compiler {
 
         CRUDModel crudModel = (CRUDModel) resource.getContents().get(0);
 
-        generateForm((Database) crudModel);
+        // generateForm((Database) crudModel);
+        generateBackend((Database) crudModel);
     }
 
     private void generateForm(Database database) throws FileNotFoundException {
@@ -60,6 +62,21 @@ public class Compiler {
 
         for (Table table : database.getTables()) {
             generateForm(table);
+        }
+    }
+    
+    public void generateBackend(Database database) throws FileNotFoundException{
+        File formsDirectory = new File(BACKEND_OUTPUT_DIRECTORY);
+
+        // create directories if it doesn't exist
+        if (!formsDirectory.exists()) {
+            formsDirectory.mkdir();
+        } else if (!formsDirectory.isDirectory()) {
+            throw new FileNotFoundException(BACKEND_OUTPUT_DIRECTORY + " is not a directory! I don't understand...");
+        }
+
+        for (Table table : database.getTables()) {
+            generateBackend(database, table);
         }
     }
 
@@ -85,6 +102,32 @@ public class Compiler {
 
         // compile create form
         formCompiler.compileCreateForm(table, createFormStream);
+
+        createFormStream.close();
+    }
+    
+    public void generateBackend(Database database, Table table) throws FileNotFoundException {
+        String tablename = table.getTableName();
+
+        String completePath = BACKEND_OUTPUT_DIRECTORY + "/" + tablename;
+        File tableDirectory = new File(completePath);
+
+        // create directories if it doesn't exist
+        if (!tableDirectory.exists()) {
+            tableDirectory.mkdir();
+        } else if (!tableDirectory.isDirectory()) {
+            throw new FileNotFoundException(completePath + " is not a directory! I don't understand...");
+        }
+
+        File createBackendFile = new File(completePath + "/backend.php");
+
+        // no need to close on exception because nothing can be closed anyway
+        OutputStream outputStream = new FileOutputStream(createBackendFile);
+        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+        PrintStream createFormStream = new PrintStream(bufferedOutputStream);
+
+        // compile create form
+        backendCompiler.compilerReadBackend(database, table, createFormStream);
 
         createFormStream.close();
     }
@@ -149,5 +192,5 @@ public class Compiler {
     }
 
     private static final String FORMS_OUTPUT_DIRECTORY = "forms";
-
+    private static final String BACKEND_OUTPUT_DIRECTORY = "backend";
 }

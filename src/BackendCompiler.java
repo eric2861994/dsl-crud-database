@@ -1,11 +1,22 @@
+
+import java.io.PrintStream;
+import org.if4150.databasecruddsl.cRUDModel.Database;
 import org.if4150.databasecruddsl.cRUDModel.Table;
 import org.if4150.databasecruddsl.cRUDModel.TableEntry;
 import org.if4150.databasecruddsl.cRUDModel.TableEntryWithoutParameter;
 
-import java.io.PrintStream;
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
 
-public class PHPCompiler {
-
+/**
+ *
+ * @author ahmadshahab
+ */
+public class BackendCompiler {
+    
     private void println(String line, int nestLevel, PrintStream out) {
         StringBuilder stringBuilder = new StringBuilder();
         for (int i = 0; i < SPACES_PER_LEVEL * nestLevel; i++) {
@@ -15,6 +26,10 @@ public class PHPCompiler {
         stringBuilder.append(line);
 
         out.println(stringBuilder.toString());
+    }
+    
+    public void compilerReadBackend(Database database, Table table, PrintStream out){
+        System.out.println("masuk");
     }
 
     public void compileCreateBackend(Table table, PrintStream out) {
@@ -96,14 +111,6 @@ public class PHPCompiler {
 
         return stringBuilder.toString();
     }
-
+    
     private static final int SPACES_PER_LEVEL = 2;
-    // TODO delete this
-    private static final String URL_STUB = "(INSERT_URL_HERE)";
-    private static final String ID_PREFIX = "crud_";
-    private static final String FORM_CLASS = "crud_form";
-    private static final String INPUT_CLASS = "crud_input";
-    private static final String LABEL_CLASS = "crud_label";
-    private static final String SUBMIT_CLASS = "crud_submit";
-    private static final String BOOLEAN_TYPE = "boolean";
 }
