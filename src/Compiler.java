@@ -10,11 +10,21 @@ import org.eclipse.xtext.validation.Issue;
 import org.if4150.databasecruddsl.CRUDModelStandaloneSetup;
 import org.if4150.databasecruddsl.cRUDModel.*;
 
+import java.io.*;
 import java.util.List;
 
 public class Compiler {
-    public static void main(String[] args) {
+    private final FormCompiler formCompiler = new FormCompiler();
 
+    private Compiler() {
+
+    }
+
+    public static void main(String[] args) throws FileNotFoundException {
+        new Compiler().run();
+    }
+
+    public void run() throws FileNotFoundException {
         Injector injector = new CRUDModelStandaloneSetup().createInjectorAndDoEMFRegistration();
         IResourceValidator iResourceValidator = injector.getInstance(IResourceValidator.class);
         XtextResourceSet resourceSet = injector.getInstance(XtextResourceSet.class);
@@ -34,20 +44,43 @@ public class Compiler {
         }
 
         CRUDModel crudModel = (CRUDModel) resource.getContents().get(0);
-        processCRUDModel(crudModel);
+
+        generateForm((Database) crudModel);
     }
 
-    public static void processCRUDModel(CRUDModel crudModel) {
-        if (crudModel instanceof Database) {
-            Database database = (Database) crudModel;
-            processDatabase(database);
+    private void generateForm(Database database) throws FileNotFoundException {
+        File formsDirectory = new File(FORMS_OUTPUT_DIRECTORY);
 
-        } else {
-            // TODO this is impossible
+        // create directories if it doesn't exist
+        if (!formsDirectory.exists()) {
+            formsDirectory.mkdirs();
+        } else if (!formsDirectory.isDirectory()) {
+            throw new FileNotFoundException(FORMS_OUTPUT_DIRECTORY + " is not a directory! I don't understand...");
+        }
+
+        for (Table table : database.getTables()) {
+            generateForm(table);
         }
     }
 
-    public static void processDatabase(Database database) {
+    public void generateForm(Table table) throws FileNotFoundException {
+
+
+
+        File createFormFile = new File(FORMS_OUTPUT_DIRECTORY + "/create.xhtml");
+
+        // no need to close on exception because nothing can be closed anyway
+        OutputStream outputStream = new FileOutputStream(createFormFile);
+        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+        PrintStream createFormStream = new PrintStream(bufferedOutputStream);
+
+        // compile create form
+        formCompiler.compileCreateForm(table, createFormStream);
+
+        createFormStream.close();
+    }
+
+    public void processDatabase(Database database) {
         System.out.println("database " + database.getDatabaseName() + " {");
         for (Table table : database.getTables()) {
             processTable(table);
@@ -55,7 +88,7 @@ public class Compiler {
         System.out.println("}");
     }
 
-    public static void processTable(Table table) {
+    public void processTable(Table table) {
         System.out.println("table " + table.getTableName() + " {");
         for (TableEntry tableEntry : table.getTableEntries()) {
             processTableEntry(tableEntry);
@@ -63,7 +96,7 @@ public class Compiler {
         System.out.println("}");
     }
 
-    public static void processTableEntry(TableEntry tableEntry) {
+    public void processTableEntry(TableEntry tableEntry) {
         if (tableEntry instanceof TableEntryWithoutParameter) {
             TableEntryWithoutParameter tableEntryWithoutParameter = (TableEntryWithoutParameter) tableEntry;
             processTableEntryWithoutParameter(tableEntryWithoutParameter);
@@ -77,7 +110,7 @@ public class Compiler {
         }
     }
 
-    public static void processTableEntryWithoutParameter(TableEntryWithoutParameter tableEntryWithoutParameter) {
+    public void processTableEntryWithoutParameter(TableEntryWithoutParameter tableEntryWithoutParameter) {
 
         String datatype = tableEntryWithoutParameter.getDatatype();
         String columnName = tableEntryWithoutParameter.getColumnName();
@@ -85,14 +118,14 @@ public class Compiler {
         System.out.println(datatype + " " + columnName + ";");
     }
 
-    public static void processTableEntryWithParameter(TableEntryWithParameter tableEntryWithParameter) {
+    public void processTableEntryWithParameter(TableEntryWithParameter tableEntryWithParameter) {
         SQLTypeWithParameter sqlTypeWithParameter = tableEntryWithParameter.getDatatype();
         processSQLTypeWithParameter(sqlTypeWithParameter);
 
         System.out.println(tableEntryWithParameter.getColumnName() + ";");
     }
 
-    public static void processSQLTypeWithParameter(SQLTypeWithParameter sqlTypeWithParameter) {
+    public void processSQLTypeWithParameter(SQLTypeWithParameter sqlTypeWithParameter) {
         if (sqlTypeWithParameter instanceof SQLString) {
             SQLString sqlString = (SQLString) sqlTypeWithParameter;
             processSQLString(sqlString);
@@ -102,7 +135,10 @@ public class Compiler {
         }
     }
 
-    public static void processSQLString(SQLString sqlString) {
+    public void processSQLString(SQLString sqlString) {
         System.out.print("string(" + sqlString.getStringLength() + ")");
     }
+
+    private static final String FORMS_OUTPUT_DIRECTORY = "forms";
+    
 }
