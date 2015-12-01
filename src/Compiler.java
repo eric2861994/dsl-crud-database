@@ -3,31 +3,36 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.xtext.resource.XtextResource;
 import org.eclipse.xtext.resource.XtextResourceSet;
-import org.eclipse.xtext.util.CancelIndicator;
-import org.eclipse.xtext.validation.CheckMode;
-import org.eclipse.xtext.validation.IResourceValidator;
-import org.eclipse.xtext.validation.Issue;
 import org.if4150.databasecruddsl.CRUDModelStandaloneSetup;
-import org.if4150.databasecruddsl.cRUDModel.*;
+import org.if4150.databasecruddsl.cRUDModel.CRUDModel;
+import org.if4150.databasecruddsl.cRUDModel.Database;
+import org.if4150.databasecruddsl.cRUDModel.Table;
 
 import java.io.*;
-import java.util.List;
 
 public class Compiler {
-    private final FormCompiler formCompiler = new FormCompiler();
-    private final BackendCompiler backendCompiler = new BackendCompiler();
+    private final FormCompiler formCompiler = new FormCompiler(this);
+    private final BackendCompiler backendCompiler = new BackendCompiler(this);
+    private final String databaseAddress;
+    private final String databaseUser;
+    private final String databasePassword;
+    private final String baseURL;
 
-    private Compiler() {
+    private String databaseName;
 
+    private Compiler(String[] args) {
+        databaseAddress = args[0];
+        databaseUser = args[1];
+        databasePassword = args[2];
+        baseURL = args[3];
     }
 
     public static void main(String[] args) throws FileNotFoundException {
-        new Compiler().run();
+        new Compiler(args).run();
     }
 
     public void run() throws FileNotFoundException {
         Injector injector = new CRUDModelStandaloneSetup().createInjectorAndDoEMFRegistration();
-        IResourceValidator iResourceValidator = injector.getInstance(IResourceValidator.class);
         XtextResourceSet resourceSet = injector.getInstance(XtextResourceSet.class);
         resourceSet.addLoadOption(XtextResource.OPTION_RESOLVE_ALL, Boolean.TRUE);
         Resource resource = resourceSet.getResource(URI.createURI("res/test.crud"), true);
@@ -36,15 +41,9 @@ public class Compiler {
             System.err.println(diagnostic);
         }
 
-        List<Issue> issues = iResourceValidator.validate(resource, CheckMode.ALL, CancelIndicator.NullImpl);
-        if (issues.size() != 0) {
-            for (Issue issue : issues) {
-                System.err.println(issue);
-            }
-            System.exit(1);
-        }
-
         CRUDModel crudModel = (CRUDModel) resource.getContents().get(0);
+        Database database = (Database) crudModel;
+        databaseName = database.getDatabaseName();
 
         generateForm((Database) crudModel);
         generateBackend((Database) crudModel);
@@ -64,21 +63,6 @@ public class Compiler {
             generateForm(table);
         }
     }
-    
-    public void generateBackend(Database database) throws FileNotFoundException{
-        File formsDirectory = new File(BACKEND_OUTPUT_DIRECTORY);
-
-        // create directories if it doesn't exist
-        if (!formsDirectory.exists()) {
-            formsDirectory.mkdir();
-        } else if (!formsDirectory.isDirectory()) {
-            throw new FileNotFoundException(BACKEND_OUTPUT_DIRECTORY + " is not a directory! I don't understand...");
-        }
-
-        for (Table table : database.getTables()) {
-            generateBackend(database, table);
-        }
-    }
 
     public void generateForm(Table table) throws FileNotFoundException {
         String tablename = table.getTableName();
@@ -93,7 +77,13 @@ public class Compiler {
             throw new FileNotFoundException(completePath + " is not a directory! I don't understand...");
         }
 
-        File createFormFile = new File(completePath + "/create.xhtml");
+        generateCreateForm(completePath, table);
+        generateReadForm(completePath, table);
+        generateUpdateForm(completePath, table);
+    }
+
+    private void generateCreateForm(String completePath, Table table) throws FileNotFoundException {
+        File createFormFile = new File(completePath + '/' + CREATE_FRAGMENT + ".php");
 
         // no need to close on exception because nothing can be closed anyway
         OutputStream outputStream = new FileOutputStream(createFormFile);
@@ -105,8 +95,51 @@ public class Compiler {
 
         createFormStream.close();
     }
-    
-    public void generateBackend(Database database, Table table) throws FileNotFoundException {
+
+    private void generateReadForm(String completePath, Table table) throws FileNotFoundException {
+        File readFormFile = new File(completePath + '/' + READ_FRAGMENT + ".php");
+
+        // no need to close on exception because nothing can be closed anyway
+        OutputStream outputStream = new FileOutputStream(readFormFile);
+        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+        PrintStream readFormStream = new PrintStream(bufferedOutputStream);
+
+        // compile create form
+        formCompiler.compileReadForm(table, readFormStream);
+
+        readFormStream.close();
+    }
+
+    private void generateUpdateForm(String completePath, Table table) throws FileNotFoundException {
+        File updateFromFile = new File(completePath + '/' + UPDATE_FRAGMENT + ".php");
+
+        // no need to close on exception because nothing can be closed anyway
+        OutputStream outputStream = new FileOutputStream(updateFromFile);
+        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+        PrintStream updateFormStream = new PrintStream(bufferedOutputStream);
+
+        // compile create form
+        formCompiler.compileUpdateForm(table, updateFormStream);
+
+        updateFormStream.close();
+    }
+
+    public void generateBackend(Database database) throws FileNotFoundException {
+        File backendDirectory = new File(BACKEND_OUTPUT_DIRECTORY);
+
+        // create directories if it doesn't exist
+        if (!backendDirectory.exists()) {
+            backendDirectory.mkdir();
+        } else if (!backendDirectory.isDirectory()) {
+            throw new FileNotFoundException(BACKEND_OUTPUT_DIRECTORY + " is not a directory! I don't understand...");
+        }
+
+        for (Table table : database.getTables()) {
+            generateBackend(table);
+        }
+    }
+
+    public void generateBackend(Table table) throws FileNotFoundException {
         String tablename = table.getTableName();
 
         String completePath = BACKEND_OUTPUT_DIRECTORY + "/" + tablename;
@@ -120,25 +153,15 @@ public class Compiler {
         }
 
         generateCreateBackend(completePath, table);
-
-//        File createBackendFile = new File(completePath + "/backend.php");
-//
-//        // no need to close on exception because nothing can be closed anyway
-//        OutputStream outputStream = new FileOutputStream(createBackendFile);
-//        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-//        PrintStream createFormStream = new PrintStream(bufferedOutputStream);
-//
-//        // compile create form
-//        backendCompiler.compilerReadBackend(database, table, createFormStream);
-//
-//        createFormStream.close();
+        generateUpdateBackend(completePath, table);
+        generateDeleteBackend(completePath, table);
     }
 
     public void generateCreateBackend(String completePath, Table table) throws FileNotFoundException {
-        File mCreateBackendFile = new File(completePath + "/create.php");
+        File createBackendFile = new File(completePath + '/' + CREATE_FRAGMENT + ".php");
 
         // no need to close on exception because nothing can be closed anyway
-        OutputStream outputStream = new FileOutputStream(mCreateBackendFile);
+        OutputStream outputStream = new FileOutputStream(createBackendFile);
         BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
         PrintStream createFormStream = new PrintStream(bufferedOutputStream);
 
@@ -148,67 +171,72 @@ public class Compiler {
         createFormStream.close();
     }
 
-    public void processDatabase(Database database) {
-        System.out.println("database " + database.getDatabaseName() + " {");
-        for (Table table : database.getTables()) {
-            processTable(table);
-        }
-        System.out.println("}");
+    public void generateUpdateBackend(String completePath, Table table) throws FileNotFoundException {
+        File updateBackendFile = new File(completePath + '/' + UPDATE_FRAGMENT + ".php");
+
+        // no need to close on exception because nothing can be closed anyway
+        OutputStream outputStream = new FileOutputStream(updateBackendFile);
+        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+        PrintStream updateFormStream = new PrintStream(bufferedOutputStream);
+
+        // compile create form
+        backendCompiler.compileUpdateBackend(table, updateFormStream);
+
+        updateFormStream.close();
     }
 
-    public void processTable(Table table) {
-        System.out.println("table " + table.getTableName() + " {");
-        for (TableEntry tableEntry : table.getTableEntries()) {
-            processTableEntry(tableEntry);
-        }
-        System.out.println("}");
+    public void generateDeleteBackend(String completePath, Table table) throws FileNotFoundException {
+        File deleteBackendFile = new File(completePath + '/' + DELETE_FRAGMENT + ".php");
+
+        // no need to close on exception because nothing can be closed anyway
+        OutputStream outputStream = new FileOutputStream(deleteBackendFile);
+        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+        PrintStream deleteFormStream = new PrintStream(bufferedOutputStream);
+
+        // compile create form
+        backendCompiler.compileDeleteBackend(table, deleteFormStream);
+
+        deleteFormStream.close();
     }
 
-    public void processTableEntry(TableEntry tableEntry) {
-        if (tableEntry instanceof TableEntryWithoutParameter) {
-            TableEntryWithoutParameter tableEntryWithoutParameter = (TableEntryWithoutParameter) tableEntry;
-            processTableEntryWithoutParameter(tableEntryWithoutParameter);
-
-        } else if (tableEntry instanceof TableEntryWithParameter) {
-            TableEntryWithParameter tableEntryWithParameter = (TableEntryWithParameter) tableEntry;
-            processTableEntryWithParameter(tableEntryWithParameter);
-
-        } else {
-            // TODO this is impossible
-        }
+    public String getCreateFormLocation(String tablename) {
+        return '/' + BASE_DIRECTORY + '/' + FORMS_OUTPUT_DIRECTORY + '/' + tablename + '/' + CREATE_FRAGMENT + ".php";
     }
 
-    public void processTableEntryWithoutParameter(TableEntryWithoutParameter tableEntryWithoutParameter) {
-
-        String datatype = tableEntryWithoutParameter.getDatatype();
-        String columnName = tableEntryWithoutParameter.getColumnName();
-
-        System.out.println(datatype + " " + columnName + ";");
+    public String getReadFormLocation(String tablename) {
+        return '/' + BASE_DIRECTORY + '/' + FORMS_OUTPUT_DIRECTORY + '/' + tablename + '/' + READ_FRAGMENT + ".php";
     }
 
-    public void processTableEntryWithParameter(TableEntryWithParameter tableEntryWithParameter) {
-        SQLTypeWithParameter sqlTypeWithParameter = tableEntryWithParameter.getDatatype();
-        processSQLTypeWithParameter(sqlTypeWithParameter);
-
-        System.out.println(tableEntryWithParameter.getColumnName() + ";");
+    public String getUpdateFormLocation(String tablename) {
+        return '/' + BASE_DIRECTORY + '/' + FORMS_OUTPUT_DIRECTORY + '/' + tablename + '/' + UPDATE_FRAGMENT + ".php";
     }
 
-    public void processSQLTypeWithParameter(SQLTypeWithParameter sqlTypeWithParameter) {
-        if (sqlTypeWithParameter instanceof SQLString) {
-            SQLString sqlString = (SQLString) sqlTypeWithParameter;
-            processSQLString(sqlString);
-
-        } else {
-            // TODO this is impossible
-        }
+    public String getCreateBackendLocation(String tablename) {
+        return '/' + BASE_DIRECTORY + '/' + BACKEND_OUTPUT_DIRECTORY + '/' + tablename + '/' + CREATE_FRAGMENT + ".php";
     }
 
-    public void processSQLString(SQLString sqlString) {
-        System.out.print("string(" + sqlString.getStringLength() + ")");
+    public String getUpdateBackendLocation(String tablename) {
+        return '/' + BASE_DIRECTORY + '/' + BACKEND_OUTPUT_DIRECTORY + '/' + tablename + '/' + UPDATE_FRAGMENT + ".php";
     }
 
-    public static String getCreateFormLocation(String tablename) {
-        return "<INSERT URL HERE>/" + FORMS_OUTPUT_DIRECTORY + '/' + tablename + '/' + CREATE_FRAGMENT + ".xhtml";
+    public String getDeleteBackendLocation(String tablename) {
+        return '/' + BASE_DIRECTORY + '/' + BACKEND_OUTPUT_DIRECTORY + '/' + tablename + '/' + DELETE_FRAGMENT + ".php";
+    }
+
+    public String getDatabaseAddress() {
+        return databaseAddress;
+    }
+
+    public String getDatabaseUser() {
+        return databaseUser;
+    }
+
+    public String getDatabasePassword() {
+        return databasePassword;
+    }
+
+    public String getDatabaseName() {
+        return databaseName;
     }
 
     public static final String FORMS_OUTPUT_DIRECTORY = "forms";
@@ -217,4 +245,5 @@ public class Compiler {
     public static final String READ_FRAGMENT = "read";
     public static final String UPDATE_FRAGMENT = "update";
     public static final String DELETE_FRAGMENT = "delete";
+    public static final String BASE_DIRECTORY = "rplsd";
 }

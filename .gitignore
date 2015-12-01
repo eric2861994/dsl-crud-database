@@ -57,3 +57,8 @@ atlassian-ide-plugin.xml
 com_crashlytics_export_strings.xml
 crashlytics.properties
 crashlytics-build.properties
+
+# forms and backends
+forms/
+backend/
+bin/

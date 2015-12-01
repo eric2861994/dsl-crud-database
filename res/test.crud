@@ -1,8 +1,14 @@
-database database1 {
+database rplsd {
 	table table1 {
 		string(255) field1;
 		integer field2;
 		float field3;
 		boolean field4;
+	}
+	
+	table table2 {
+		string(3) bandara;
+		integer kapasitas;
+		boolean internasional;
 	}
 }
